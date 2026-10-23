@@ -21,8 +21,8 @@ API is asked for the passage's words or the search's count (cached at the
 edge); if it cannot answer in 2.5 s, the page keeps its fixed tags.
 
 Links are read as the clients write them: `/BOOK/ch/v`, `numbering=`,
-`editions=`/`base=`, and a search's `t.N.…` terms with `scope`, `range` and
-`texts`. Book names and feature labels are generated from the clients'
+`editions=`/`base=`, and a search's `t.N.…` terms with `scope`, `range`,
+`texts` and `hit` (one result). Book names and feature labels are generated from the clients'
 `src/data/books.json` and `src/data/features.json`.
 
 ```sh

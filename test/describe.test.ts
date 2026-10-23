@@ -38,7 +38,7 @@ test("a search: what was searched, and what was found where", async () => {
 });
 
 test("a link to one result: that result, and what it is one of", async () => {
-  const p = await preview("/JHN/3?editions=bible.sblgnt,bible.net&base=bible.net&t.0.features.lexeme=%E1%BC%80%CE%B3%CE%B1%CF%80%CE%AC%CF%89&scope=verse&range=nt&texts=main&at=21#JHN/3/16");
+  const p = await preview("/JHN/3?editions=bible.sblgnt,bible.net&base=bible.net&t.0.features.lexeme=%E1%BC%80%CE%B3%CE%B1%CF%80%CE%AC%CF%89&scope=verse&range=nt&texts=main&at=21&hit=JHN/3/16");
   assert.equal(p?.title, "John 3:16 — ἀγαπάω");
   assert.match(p!.description!, /^“For this is the way God loved the world.*” \(NET\) One of 110 verses in the New Testament with ἀγαπάω\.$/);
 });

@@ -127,7 +127,8 @@ export async function describe(url: URL, opts: DescribeOptions = {}): Promise<Pr
       const n = counted.total_results;
       const found = `${n.toLocaleString("en-US")} ${unitWord(scope, n)} in ${where} with ${what}.`;
       // A link to one result: that result, and what it is one of.
-      const ref = url.hash.replace(/^#/, "").split("/").filter(Boolean).map((s) => decodeURIComponent(s));
+      // (`hit`; a link's fragment never reaches a server, so an older link with one previews as the whole search.)
+      const ref = (params.get("hit") ?? "").split("/").filter(Boolean).map((s) => decodeURIComponent(s));
       const marked = ref.length >= 2 ? placeFromRef(ref) : undefined;
       if (marked) {
         const w = await words(marked, base ?? linkNumbering[marked.book.corpus]).catch(() => undefined);
