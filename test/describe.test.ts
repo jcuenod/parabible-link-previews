@@ -62,3 +62,18 @@ test("link-preview bots, and readers", () => {
   assert.ok(!isPreviewBot("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1"));
   assert.ok(!isPreviewBot(null));
 });
+
+test("the card is the API's, for the same passage or search, in the link's texts", async () => {
+  const verse = new URL((await preview("/PSA/50/12?numbering=bible.rahlfs_lxx&editions=bible.net,bible.rahlfs_lxx&base=bible.net"))!.image!);
+  assert.equal(verse.origin + verse.pathname, "https://api.parabible.com/v1/preview.png");
+  assert.deepEqual(Object.fromEntries(verse.searchParams), { ref: "PSA 50:12", scheme: "bible.rahlfs_lxx", editions: "bible.net,bible.rahlfs_lxx" });
+  const one = new URL((await preview("/JHN/3?t.0.features.lexeme=%E1%BC%80%CE%B3%CE%B1%CF%80%CE%AC%CF%89&scope=verse&range=nt&texts=main&at=21&hit=JHN/3/16"))!.image!);
+  assert.deepEqual(Object.fromEntries(one.searchParams), {
+    "t.0.features.lexeme": "ἀγαπάω",
+    scope: "verse",
+    range: "nt",
+    searchEditions: "bible.bhsa,bible.rahlfs_lxx,bible.sblgnt,af.grc,philo.grc,josephus.grc",
+    at: "21",
+    hit: "JHN/3/16",
+  });
+});

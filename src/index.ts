@@ -22,6 +22,11 @@ export function withPreview(page: Response, preview: Preview): Response {
   let rewriter = new HTMLRewriter()
     .on("title", { element: (el) => void el.setInnerContent(title) })
     .on('meta[property="og:title"]', content(preview.title));
+  if (preview.image) {
+    rewriter = rewriter
+      .on('meta[property="og:image"]', content(preview.image))
+      .on('meta[property="og:image:alt"]', content(preview.description ? `${preview.title}: ${preview.description}` : preview.title));
+  }
   if (preview.description) {
     rewriter = rewriter
       .on('meta[property="og:description"]', content(preview.description))

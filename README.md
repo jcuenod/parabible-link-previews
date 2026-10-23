@@ -3,7 +3,9 @@
 Per-link titles and descriptions for Parabible's link previews. A link to a
 passage unfurls as "Psalms 51:10" with the verse's words; a search as
 "ἀγαπάω — search" with what it found ("110 verses in the New Testament with
-ἀγαπάω."). The image stays the clients' fixed card.
+ἀγαπάω."). Its image is the API's card for the same passage or search
+(`/v1/preview.png` on api.parabible.com, drawn by the server from its own
+data), so the server must have that endpoint before the clients deploy this.
 
 Both clients depend on it and put it in front of their pages:
 

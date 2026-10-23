@@ -6,6 +6,8 @@ export interface Preview {
   title: string;
   /** og:description: the passage's words, or what the search found */
   description?: string;
+  /** og:image: the API's card for this passage or search (/v1/preview.png) */
+  image?: string;
 }
 
 export interface DescribeOptions {
@@ -104,6 +106,9 @@ export async function describe(url: URL, opts: DescribeOptions = {}): Promise<Pr
   };
   // A link names the numbering its place is in, or its texts' base does (an older link), or it is the corpus's own.
   const numberingOf = (p: Place) => params.get("numbering") ?? base ?? linkNumbering[p.book.corpus];
+  // The card: the API draws it from the same passage or search, in the texts the link shows.
+  const card = (entries: [string, string | null | undefined][]) =>
+    `${api}/preview.png?${new URLSearchParams([...entries, ["editions", linked.slice(0, 10).join(",")]].filter((e): e is [string, string] => !!e[1]))}`;
 
   try {
     if (terms.length > 0) {
@@ -125,6 +130,14 @@ export async function describe(url: URL, opts: DescribeOptions = {}): Promise<Pr
         3600,
       );
       const n = counted.total_results;
+      const image = card([
+        ...[...params].filter(([k]) => k.startsWith("t.")),
+        ["scope", scope ?? "clause"],
+        ["range", params.get("range") !== "all" ? params.get("range") : null],
+        ["searchEditions", searchEditions(params.get("texts"))],
+        ["at", params.get("at")],
+        ["hit", params.get("hit")],
+      ]);
       const found = `${n.toLocaleString("en-US")} ${unitWord(scope, n)} in ${where} with ${what}.`;
       // A link to one result: that result, and what it is one of.
       // (`hit`; a link's fragment never reaches a server, so an older link with one previews as the whole search.)
@@ -135,9 +148,10 @@ export async function describe(url: URL, opts: DescribeOptions = {}): Promise<Pr
         return {
           title: `${placeLabel(marked)} — ${what}`,
           description: w ? `“${w.text}” (${w.edition}) One of ${found.charAt(0).toLowerCase()}${found.slice(1)}` : `One of ${found.charAt(0).toLowerCase()}${found.slice(1)}`,
+          image,
         };
       }
-      return { title: `${what} — search`, description: found.charAt(0).toUpperCase() + found.slice(1) };
+      return { title: `${what} — search`, description: found.charAt(0).toUpperCase() + found.slice(1), image };
     }
     const p = place!;
     const numbering = numberingOf(p);
@@ -145,7 +159,9 @@ export async function describe(url: URL, opts: DescribeOptions = {}): Promise<Pr
     // A place written in another numbering than the corpus's own says so: LXX Psalm 50 is not the English Psalm 50.
     const note = numbering !== linkNumbering[p.book.corpus] ? ` (${known.find((e) => e.slug === numbering)?.shortname ?? numbering} numbering)` : "";
     const w = await words(p, numbering);
-    return { title: `${placeLabel(p)}${note}`, description: w ? `“${w.text}” (${w.edition})` : undefined };
+    const verses = p.verse ? `:${p.verse}${p.through ? `-${p.through}` : ""}` : "";
+    const image = card([["ref", `${p.book.abbrev} ${p.chapter}${verses}`], ["scheme", numbering]]);
+    return { title: `${placeLabel(p)}${note}`, description: w ? `“${w.text}” (${w.edition})` : undefined, image };
   } catch {
     return null;
   }
