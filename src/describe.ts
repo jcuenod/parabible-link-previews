@@ -1,12 +1,13 @@
 import { englishText, linkNumbering, placeFromPath, placeFromRef, placeLabel, type Place } from "./place.ts";
 import { describeTerms, rangeLabel, readTerms, searchEditions, unitWord } from "./search.ts";
+import { cardUrl } from "./card.ts";
 
 export interface Preview {
   /** og:title: the place, or what was searched */
   title: string;
   /** og:description: the passage's words, or what the search found */
   description?: string;
-  /** og:image: the API's card for this passage or search (/v1/preview.png) */
+  /** og:image: the API's card for this passage or search (/v1/card/{spec}.png) */
   image?: string;
 }
 
@@ -106,9 +107,6 @@ export async function describe(url: URL, opts: DescribeOptions = {}): Promise<Pr
   };
   // A link names the numbering its place is in, or its texts' base does (an older link), or it is the corpus's own.
   const numberingOf = (p: Place) => params.get("numbering") ?? base ?? linkNumbering[p.book.corpus];
-  // The card: the API draws it from the same passage or search, in the texts the link shows.
-  const card = (entries: [string, string | null | undefined][]) =>
-    `${api}/preview.png?${new URLSearchParams([...entries, ["editions", linked.slice(0, 10).join(",")]].filter((e): e is [string, string] => !!e[1]))}`;
 
   try {
     if (terms.length > 0) {
@@ -130,14 +128,8 @@ export async function describe(url: URL, opts: DescribeOptions = {}): Promise<Pr
         3600,
       );
       const n = counted.total_results;
-      const image = card([
-        ...[...params].filter(([k]) => k.startsWith("t.")),
-        ["scope", scope ?? "clause"],
-        ["range", params.get("range") !== "all" ? params.get("range") : null],
-        ["searchEditions", searchEditions(params.get("texts"))],
-        ["at", params.get("at")],
-        ["hit", params.get("hit")],
-      ]);
+      // The card: the API draws it from the same search, in the texts the link shows.
+      const image = cardUrl(api, { search: params, editions: linked });
       const found = `${n.toLocaleString("en-US")} ${unitWord(scope, n)} in ${where} with ${what}.`;
       // A link to one result: that result, and what it is one of.
       // (`hit`; a link's fragment never reaches a server, so an older link with one previews as the whole search.)
@@ -160,7 +152,11 @@ export async function describe(url: URL, opts: DescribeOptions = {}): Promise<Pr
     const note = numbering !== linkNumbering[p.book.corpus] ? ` (${known.find((e) => e.slug === numbering)?.shortname ?? numbering} numbering)` : "";
     const w = await words(p, numbering);
     const verses = p.verse ? `:${p.verse}${p.through ? `-${p.through}` : ""}` : "";
-    const image = card([["ref", `${p.book.abbrev} ${p.chapter}${verses}`], ["scheme", numbering]]);
+    const image = cardUrl(api, {
+      ref: `${p.book.abbrev} ${p.chapter}${verses}`,
+      numbering: numbering !== linkNumbering[p.book.corpus] ? numbering : undefined,
+      editions: linked,
+    });
     return { title: `${placeLabel(p)}${note}`, description: w ? `“${w.text}” (${w.edition})` : undefined, image };
   } catch {
     return null;

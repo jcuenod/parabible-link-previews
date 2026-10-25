@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { describe } from "../src/describe.ts";
 import { isPreviewBot } from "../src/index.ts";
+import { cardUrl } from "../src/card.ts";
 
 // Against the live API, as the Worker will be, with the User-Agent the Worker sends.
 const preview = (link: string) => describe(new URL(link, "https://new.parabible.com"), { timeout: 15000 });
@@ -63,17 +64,39 @@ test("link-preview bots, and readers", () => {
   assert.ok(!isPreviewBot(null));
 });
 
-test("the card is the API's, for the same passage or search, in the link's texts", async () => {
-  const verse = new URL((await preview("/PSA/50/12?numbering=bible.rahlfs_lxx&editions=bible.net,bible.rahlfs_lxx&base=bible.net"))!.image!);
-  assert.equal(verse.origin + verse.pathname, "https://api.parabible.com/v1/preview.png");
-  assert.deepEqual(Object.fromEntries(verse.searchParams), { ref: "PSA 50:12", scheme: "bible.rahlfs_lxx", editions: "bible.net,bible.rahlfs_lxx" });
-  const one = new URL((await preview("/JHN/3?t.0.features.lexeme=%E1%BC%80%CE%B3%CE%B1%CF%80%CE%AC%CF%89&scope=verse&range=nt&texts=main&at=21&hit=JHN/3/16"))!.image!);
-  assert.deepEqual(Object.fromEntries(one.searchParams), {
-    "t.0.features.lexeme": "ἀγαπάω",
-    scope: "verse",
-    range: "nt",
-    searchEditions: "bible.bhsa,bible.rahlfs_lxx,bible.sblgnt,af.grc,philo.grc,josephus.grc",
-    at: "21",
-    hit: "JHN/3/16",
+/** A card address's spec, decoded: its `key=value` pairs. */
+function spec(image: string): Record<string, string> {
+  const m = /^https:\/\/api\.parabible\.com\/v1\/card\/([A-Za-z0-9_-]+)\.png$/.exec(image);
+  assert.ok(m, image);
+  const text = Buffer.from(m[1], "base64url").toString("utf8");
+  return Object.fromEntries(text.split("&").map((p) => [p.split("=")[0], p.split("=").slice(1).join("=")]));
+}
+
+test("the card is the API's, for the same passage or search, in the link's texts, at an address of letters and digits", async () => {
+  const verse = (await preview("/PSA/50/12?numbering=bible.rahlfs_lxx&editions=bible.net,bible.rahlfs_lxx&base=bible.net"))!.image!;
+  assert.deepEqual(spec(verse), { ref: "PSA 50:12", n: "bible.rahlfs_lxx", e: "net,rahlfs_lxx" });
+  // What the server would assume anyway is left out: the corpus's own numbering, the default texts.
+  assert.deepEqual(spec((await preview("/PSA/51/10"))!.image!), { ref: "PSA 51:10" });
+  const link = "/JOS/8?editions=bible.bhsa,bible.rahlfs_lxx,bible.sblgnt,bible.net&base=bible.net&t.0.features.lexeme=%D7%9B%D7%97%D7%A9%D7%81&t.1.features.lexeme=%D7%A9%D6%B8%D7%82%D7%A8%D6%B8%D7%94&scope=verse&range=ot,nt&texts=main&size=20";
+  const search = (await preview(link))!.image!;
+  assert.deepEqual(spec(search), { "0:lexeme": "כחשׁ", "1:lexeme": "שָׂרָה", s: "verse", r: "ot,nt" });
+  assert.ok(search.length < 120, `${search.length}: ${search}`);
+  const one = (await preview("/JHN/3?t.0.features.lexeme=%E1%BC%80%CE%B3%CE%B1%CF%80%CE%AC%CF%89&scope=verse&range=nt&texts=main&at=21&hit=JHN/3/16"))!.image!;
+  assert.deepEqual(spec(one), { "0:lexeme": "ἀγαπάω", s: "verse", r: "nt", a: "21", h: "JHN/3/16" });
+});
+
+test("a card's spec says partners, inversions and the texts searched compactly", () => {
+  const search = new URLSearchParams("t.0.features.lexeme=שׁמע&t.0.aligned.edition=bible.rahlfs_lxx&t.0.aligned.lexeme=ἀκούω&t.1.inverted=true&t.1.features.lexeme=θεός&t.2.unaligned.edition=bible.bsb&scope=parallel&range=all&texts=main,dss.1qisaa");
+  const url = cardUrl("https://api.parabible.com/v1", { search, editions: ["bible.bhsa", "josephus.grc"] });
+  assert.deepEqual(spec(url), {
+    "0:lexeme": "שׁמע",
+    "0a:edition": "bible.rahlfs_lxx",
+    "0a:lexeme": "ἀκούω",
+    "1!": "",
+    "1:lexeme": "θεός",
+    "2u:edition": "bible.bsb",
+    s: "parallel",
+    x: "main,dss.1qisaa",
+    e: "bhsa,josephus.grc",
   });
 });
