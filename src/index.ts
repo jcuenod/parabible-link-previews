@@ -14,36 +14,47 @@ export const isPreviewBot = (userAgent: string | null): boolean => !!userAgent &
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-/** The page's head with the preview's title and description in place of the fixed ones. */
-export function withPreview(page: Response, preview: Preview): Response {
-  const title = `${preview.title} · Parabible`;
-  let described = false;
+/**
+ * The page's head with the link's own og:url, and the preview's title, description and image in place of the
+ * fixed ones. A fixed og:url would have Facebook and LinkedIn take every link for the home page; the link's
+ * own is what WhatsApp asks for beside og:title and og:description before it shows a preview.
+ */
+export function withPreview(page: Response, preview: Preview | null, url: string): Response {
   const content = (value: string) => ({ element: (el: Element) => el.setAttribute("content", value) });
-  let rewriter = new HTMLRewriter()
-    .on("title", { element: (el) => void el.setInnerContent(title) })
-    .on('meta[property="og:title"]', content(preview.title));
-  if (preview.image) {
+  let described = false;
+  let located = false;
+  let rewriter = new HTMLRewriter().on('meta[property="og:url"]', {
+    element: (el) => {
+      located = true;
+      el.setAttribute("content", url);
+    },
+  });
+  if (preview) {
     rewriter = rewriter
-      .on('meta[property="og:image"]', content(preview.image))
-      .on('meta[property="og:image:alt"]', content(preview.description ? `${preview.title}: ${preview.description}` : preview.title));
-  }
-  if (preview.description) {
-    rewriter = rewriter
-      .on('meta[property="og:description"]', content(preview.description))
-      .on('meta[name="description"]', {
+      .on("title", { element: (el) => void el.setInnerContent(`${preview.title} · Parabible`) })
+      .on('meta[property="og:title"]', content(preview.title));
+    if (preview.image) {
+      rewriter = rewriter
+        .on('meta[property="og:image"]', content(preview.image))
+        .on('meta[property="og:image:alt"]', content(preview.description ? `${preview.title}: ${preview.description}` : preview.title));
+    }
+    if (preview.description) {
+      rewriter = rewriter.on('meta[property="og:description"]', content(preview.description)).on('meta[name="description"]', {
         element: (el) => {
           described = true;
           el.setAttribute("content", preview.description!);
         },
-      })
-      // A page without a description of its own gets one.
-      .on("head", {
-        element: (el) =>
-          el.onEndTag((end) => {
-            if (!described) end.before(`<meta name="description" content="${esc(preview.description!)}" />`, { html: true });
-          }),
       });
+    }
   }
+  // What the page lacks of these, it gets.
+  rewriter = rewriter.on("head", {
+    element: (el) =>
+      el.onEndTag((end) => {
+        if (!located) end.before(`<meta property="og:url" content="${esc(url)}" />`, { html: true });
+        if (preview?.description && !described) end.before(`<meta name="description" content="${esc(preview.description)}" />`, { html: true });
+      }),
+  });
   const res = rewriter.transform(page);
   const out = new Response(res.body, res);
   // Varies by who asks: a cache must not hand a reader the bots' page, or a bot the readers'.
@@ -55,9 +66,10 @@ export interface LinkPreviewOptions extends DescribeOptions {}
 
 /**
  * In front of a client's pages: a link-preview bot asking for a page gets it
- * with a title and description of its own (the passage and its words, what a
- * search found); everyone else, and anything that is not a page, gets
- * `next()` untouched. Any failure leaves the fixed tags.
+ * with its own og:url and a title, description and image of its own (the
+ * passage and its words, what a search found); everyone else, and anything
+ * that is not a page, gets `next()` untouched. A page that cannot be described
+ * keeps the fixed tags.
  */
 export async function linkPreview(request: Request, next: () => Promise<Response>, opts: LinkPreviewOptions = {}): Promise<Response> {
   if (request.method !== "GET" || !isPreviewBot(request.headers.get("User-Agent"))) return next();
@@ -65,6 +77,6 @@ export async function linkPreview(request: Request, next: () => Promise<Response
   // Files (/og-card.png, /assets/…) are not pages.
   if (/\.[a-z0-9]+$/i.test(url.pathname)) return next();
   const [page, preview] = await Promise.all([next(), describe(url, opts).catch(() => null)]);
-  if (!preview || !page.ok || !(page.headers.get("Content-Type") ?? "").includes("text/html")) return page;
-  return withPreview(page, preview);
+  if (!page.ok || !(page.headers.get("Content-Type") ?? "").includes("text/html")) return page;
+  return withPreview(page, preview, url.href);
 }
